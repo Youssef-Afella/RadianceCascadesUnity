@@ -2,7 +2,7 @@
 A simple 2D implementation of Radiance Cascades by Alexander Sannikov in Unity<br/>
 Radiance Cascades is a smart approach to both 2D and 3D Realtime Global Illumination<br/>
 The idea is to cast a finite amout of rays in an effective way to get the best approximation of the radiance in each pixel of the scene<br/>
-https://github.com/user-attachments/assets/9ab43cc8-c72b-471e-b4b4-47fc9c884b76
+![Capture1](https://github.com/user-attachments/assets/f1d4755c-bf38-4af3-99c6-e9aefe41bb8f)
 
 In this small post I will cover a bit about the implementation process only and my project structure<br/>
 If you wanna know more about the actual concept here is the original paper : [Radiance Cascades](https://drive.google.com/file/d/1L6v1_7HY2X-LV3Ofb6oyTIxgEaP4LOI6/view)
@@ -21,7 +21,7 @@ The Cascades Compute is done through 3 major steps:
 # Computing Cascades
 As I said, this approch relies on casting the rays in an effective pattern to approcimate the radiance<br/>
 I recommend watching this video made by SimonDev which talks about this in a more detailed way : https://youtu.be/3so7xdZHKxw?si=kkuR7l4EZW4KxlvQ<br/>
-What we usually does is casting a constant number of ray for each pixel like this example : [ShaderToy by DanielHopper](https://www.shadertoy.com/view/4ftXzS) and this is very costing in performance<br/>
+What we usually does is casting a constant number of ray for each pixel like this example : [ShaderToy by DanielHopper](https://www.shadertoy.com/view/4ftXzS) and this is VERY costing in performance<br/>
 
 So how do we compute:
 Let's say that our screen resolution is 1920x1080 and the dimensions of the probes in the cascade0 is 2x2<br/>
@@ -39,6 +39,7 @@ Check Tmpvar article, it has the best visualisation of that : https://tmpvar.com
 
 We do this process for a number of levels and we end up have a stack of textures like this:
 ![Im3](https://github.com/user-attachments/assets/68868a48-331c-409d-8eee-8b00b7118b99)
+
 And those are your final cascades ! (there is a formula to know exactly how many cascades you need but it wasn't really working for me)<br/>
 You can see how the ray length is increasing with each level also the position where it starts
 
