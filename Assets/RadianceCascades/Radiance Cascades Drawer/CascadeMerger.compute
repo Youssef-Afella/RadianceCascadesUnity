@@ -1,0 +1,118 @@
+#pragma kernel CSMain
+
+#define PI 3.141592653589793
+
+float2 Resolution;
+
+static const int cascade0Dim = 2;
+
+Texture2D<float4> upperCascade;
+RWTexture2D<float4> lowerCascade;
+
+SamplerState linearClampSampler;
+
+int lowerLevel;
+
+float4 mix(float4 x, float4 y, float a) {
+    return x * (1 - a) + y * a;
+}
+
+int AngleToIndex(float angle, int dim) {
+    float t = angle / (2 * PI);
+    int index = floor(t * float(dim * dim));
+    return index;
+}
+
+int2 IndexToCoords(int index, int dim) {
+    index = index % (dim * dim);//in case the index is lower than 0 or higher than the number of angles
+    int x = index % dim;
+    int y = index / dim;
+
+    return int2(x, y);
+}
+
+//This function findes the 4 nearest angles in the upperProbe to the given angle, and average the values
+float4 AverageNearbyAngles(int2 coords, float angle) {
+    int upperCascadeDim = cascade0Dim * pow(2, lowerLevel+1);
+
+    //Transform the angle to an index value inside the upperCascade
+    float angleStep = (2 * PI) / (float)(upperCascadeDim * upperCascadeDim);
+    int index = AngleToIndex(angle - angleStep/2, upperCascadeDim);//We substract a small offset to get a correct index value
+    //You can try to remove it and you will see the difference
+
+    int2 angle1Position = coords + IndexToCoords(index - 1, upperCascadeDim);
+    int2 angle2Position = coords + IndexToCoords(index, upperCascadeDim);
+    int2 angle3Position = coords + IndexToCoords(index + 1, upperCascadeDim);
+    int2 angle4Position = coords + IndexToCoords(index + 2, upperCascadeDim);
+    //IndexToCoords() here reconstruct the 2D coords from the 1D index
+
+    //Finally sampling and averaging
+    float4 dir1 = upperCascade[angle1Position];
+    float4 dir2 = upperCascade[angle2Position];
+    float4 dir3 = upperCascade[angle3Position];
+    float4 dir4 = upperCascade[angle4Position];
+
+    return (dir1 + dir2 + dir3 + dir4) * 0.25;
+}
+
+//This function take the averaged angles from the 4 nearby probes (in the upper cascade) and interpolate between them based on the position of the lower probe (in the lower cascade)
+float4 SampleNearbyProbes(int2 coords, float angle) {
+    //Calculating dimensions
+    int lowerCascadeDim = cascade0Dim * pow(2, lowerLevel);
+    int upperCascadeDim = cascade0Dim * pow(2, lowerLevel + 1);
+
+    //Calculate the position of the center of the lower probe
+    int2 lowerCascadeIndex = floor(coords / lowerCascadeDim);
+    int2 lowerCascadeCenterPos = lowerCascadeIndex * lowerCascadeDim + (lowerCascadeDim/2);
+
+    //Calculate the position of bottom-left upper probe
+    //(there is 4 upper probes surrounding the lower probe: bottom-left, bottom-right, top-left, top-right)
+    //(this code gets the position of the bottom-left one)
+    int2 upperCascadeIndex = floor((lowerCascadeIndex - 0.5) / 2.0);
+    int2 upperCascadeOriginPos = upperCascadeIndex * upperCascadeDim;
+    int2 upperCascadeCenterPos = upperCascadeOriginPos + upperCascadeDim/2;
+
+    //Since we know the position of the bottom-left probe, the others can be reached just with adding a simple offset
+    //the function AverageNearbyAngles() will take care of the rest and find the 4 nearest angle to the one we want and averge them
+    float4 rad1 = AverageNearbyAngles(upperCascadeOriginPos + int2(0, 0), angle);
+    float4 rad2 = AverageNearbyAngles(upperCascadeOriginPos + int2(upperCascadeDim, 0), angle);
+    float4 rad3 = AverageNearbyAngles(upperCascadeOriginPos + int2(0, upperCascadeDim), angle);
+    float4 rad4 = AverageNearbyAngles(upperCascadeOriginPos + int2(upperCascadeDim, upperCascadeDim), angle);
+
+    float2 weight = (lowerCascadeCenterPos - upperCascadeCenterPos) / float(upperCascadeDim);
+    //the weight have exactly 4 possible values : (0.25, 0.25), (0.25, 0.75), (0.75, 0.25), (0.75, 0.75)
+    //it's the relative position of the lower probe in the 4 upper probes
+
+    //Then we bilinearly interpolate between them
+    float4 m1 = mix(rad1, rad2, weight.x);
+    float4 m2 = mix(rad3, rad4, weight.x);
+
+    float4 radiance = mix(m1, m2, weight.y);
+
+    return radiance;
+}
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    int2 coords = id.xy;
+
+    float4 radiance = lowerCascade[coords];//Radiance from lower cascade
+
+    uint cascadeDim = cascade0Dim * pow(2, lowerLevel);
+    int2 coordsInCascade = fmod(coords, cascadeDim);
+
+    //We start by calculating the angle of that pixel in the lower cascade
+    float angleStep = (2 * PI) / (float)(cascadeDim * cascadeDim);
+    float angle = (coordsInCascade.x + coordsInCascade.y * cascadeDim) * angleStep;
+    angle += angleStep / 2;
+    
+    //After getting the angle we then sample the 4 nearby probes in the upper cascade in that angle (or direction as other say)
+    float4 upperRadiance = SampleNearbyProbes(coords, angle);
+
+    //Finally we compose the radiance we calculated from the upper cascade and the radiance from lower one
+    radiance.rgb += upperRadiance.rgb * radiance.a;
+    radiance.a *= upperRadiance.a;
+
+    lowerCascade[id.xy] = radiance;
+}

@@ -1,0 +1,93 @@
+#pragma kernel CSMain
+
+#define PI 3.141592653589793
+
+Texture2D<float4> SDFTexture;
+int Level;
+float2 Resolution;
+RWTexture2D<float4> Result;
+
+static const int cascade0Dim = 2;
+
+//Returns the range of the Ray that we will be shooting
+//Notice that the end of the lower ray is the start of the upper ray
+//cascade0 range : 0 to 1
+//cascade1 range : 1 to 5
+//cascade2 range : 5 to 21
+//...
+int2 calculateRange(int cascadeLevel) {
+    const float factor = 4.0;
+
+    float start =  (1.0 - pow(factor, cascadeLevel)) / (1.0 - factor);
+    float end = (1.0 - pow(factor, cascadeLevel + 1.0)) / (1.0 - factor);
+
+    return int2(start, end);
+}
+
+//Ray Marching from the SDF
+float4 SampleRadianceSDF(float2 rayOrigin, float2 rayDirection, int2 range) {
+
+    float start = range.x;
+    float end = range.y;
+
+    float t = start;
+
+    for (int i = 0; i < 16; i++) {
+        float2 currentPosition = rayOrigin + t * rayDirection;
+
+        if (t > end) {
+            break;
+        }
+
+        float4 sceneSample = SDFTexture[currentPosition];
+        sceneSample.a *= max(Resolution.x, Resolution.y);
+        //this multiplication is necessary to transform the SDF from linear to pixel space cause our ray marcher is operating in pixels
+
+        float sceneDist = sceneSample.w;
+        float3 sceneColour = sceneSample.xyz;
+
+        if (sceneDist > 0.1) {
+            t += sceneDist;
+
+            continue;
+        }
+
+        return float4(sceneColour, 0.0);
+    }
+
+    return float4(0, 0, 0, 1.0);
+}
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    int2 pixelIndex = id.xy;
+
+    //Start by calculating the Dimension of the cascade and Range of the rays in this cascade
+    uint cascadeDim = cascade0Dim * pow(2, Level);
+    int2 cascadeRange = calculateRange(Level);
+
+    //We calcualte the position of that pixel inside the cascade probe
+    int2 coordsInCascade = fmod(pixelIndex, cascadeDim);
+
+    //We calculate the angle of this pixel
+    float angleStep = (2 * PI) / (float)(cascadeDim * cascadeDim);//the total number of angles in the cascade is dimension*dimension
+    float angle = (coordsInCascade.x + coordsInCascade.y * cascadeDim) * angleStep;//Tranform the 2D coords to 1D index and then we multiply by the step we calculated
+    angle += angleStep / 2;//We add a small offset to the angle so that we don't keep casting a ray in the same direction in all the cascades
+    //-------------------------------------------------------------------
+    //angles in cascade0 without offset : 0, 90, 180, 270
+    //angles in cascade1 without offset : 0, 22.5, 45, 67.5, 90, ... (angles repeat)
+    //-------------------------------------------------------------------
+    //angles in cascade0 with offset : 45, 135, 225, 315
+    //angles in cascade1 with offset : 11.25, 33.75, 56.25, 78.75 ... (angles doesn't repeat)
+    //-------------------------------------------------------------------
+    //(the anlges in the example above are in Degrees, in the actual code we calculate them in Radian)
+
+    float2 rayOrigin = floor(pixelIndex / (float)cascadeDim) * cascadeDim + cascadeDim/2;//the center of the cascade is the origin of the ray
+    float2 rayDirection = float2(cos(angle), sin(angle));
+
+    //Finally the ray marching 
+    float4 radiance = SampleRadianceSDF(rayOrigin, rayDirection, cascadeRange);
+
+    Result[id.xy] = radiance;
+}

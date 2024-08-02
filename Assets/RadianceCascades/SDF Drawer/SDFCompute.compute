@@ -1,0 +1,31 @@
+#pragma kernel CSMain
+
+float2 Resolution;
+
+float2 startPos;
+float2 endPos;
+float3 brushColor;
+float brushSize;
+
+RWTexture2D<float4> Result;
+
+float sdfSegment(float2 p, float2 a, float2 b, float width) {
+    float h = min(1.0, max(0.0, dot(p - a, b - a) / dot(b - a, b - a)));
+    return length(p - (a + h * (b - a))) - width;
+}
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    float2 uv = id.xy / max(Resolution.x, Resolution.y);
+
+    float3 oldColor = Result[id.xy].rgb;
+    float oldDistance = Result[id.xy].a;
+
+    float sdf = sdfSegment(uv, startPos, endPos, brushSize);
+    float distance = min(oldDistance, sdf);
+
+    float3 color = lerp(brushColor, oldColor, step(0.001, sdf));
+
+    Result[id.xy] = float4(color, distance);
+}
