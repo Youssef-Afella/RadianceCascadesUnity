@@ -23,26 +23,29 @@ As I said, this approch relies on casting the rays in an effective pattern to ap
 I recommend watching this video made by SimonDev which talks about this in a more detailed way : https://youtu.be/3so7xdZHKxw?si=kkuR7l4EZW4KxlvQ<br/>
 What we usually does is casting a constant number of ray for each pixel like this example : [ShaderToy by DanielHopper](https://www.shadertoy.com/view/4ftXzS) and this is very costing in performance<br/>
 
+So how do we compute:
 Let's say that our screen resolution is 1920x1080 and the dimensions of the probes in the cascade0 is 2x2<br/>
 (in the project I changed the resolution of the cascades for the sake of performance in mobile tests but let's assume that the cascade resolution is the same as screen resolution for simplicity)<br/>
 so we will have 960x540 probe (which is 518400 probes in total), for each probe we will cast 4 rays in 4 different angles.<br/>
+
 To store the result of casting those rays, we can use a Texture that have exactly the same resolution of Screen, so each 4 pixels represents a probe and each pixel in those probes represents an angle, and what we store in the texture is the result of casting a ray in that angle (the ray origin is the center of the probe)<br/>
 The same goes for upper cascades (for cascade1 : dim=4, numOfAngles=16):
 ![Im0](https://github.com/user-attachments/assets/52978085-ed39-435c-b941-d22c48ede0f2)
-GM Shaders has a better visualisation of this in his repo : https://github.com/Yaazarai/RadianceCascades/tree/main<br/>
+Yaazarai has a better visualisation of this in his repo : https://github.com/Yaazarai/RadianceCascades/tree/main<br/>
 (There is another small detail I haven't talkedabout but you will find it in the project)
 
 There is one other thing, we need to make sure to cast the rays in the apropriate Range<br/>
-Check tmpvar article, it has the best visualisation of that : https://tmpvar.com/poc/radiance-cascades/
+Check Tmpvar article, it has the best visualisation of that : https://tmpvar.com/poc/radiance-cascades/
 
 We do this process for a number of levels and we end up have a stack of textures like this:
 ![Im3](https://github.com/user-attachments/assets/68868a48-331c-409d-8eee-8b00b7118b99)
 And those are your final cascades ! (there is a formula to know exactly how many cascades you need but it wasn't really working for me)<br/>
-You can see how the ray length is increasing with each level also te position where it starts
+You can see how the ray length is increasing with each level also the position where it starts
 
 # Merging Cascades
 Now here is the important part, we need to merge our cascades in a way that let them converge to the final radiance.<br/>
 The merging starts from the upper cascades to the lower ones (we merge the cascade with level n+1 with n). And the result of merging the two cascades is stored in the lower one to be used in the next interation<br/>
+
 So how do we merge:
 Let's say we want to merge the cascade1 with cascade0<br/>
 For each probe in the lowerCascade (cascade0) we find the 4 nearest probes to it in the upperCascade (cascade1)<br/>
@@ -71,10 +74,10 @@ And there you have it, a cheap way to calculate the Global Illumination in Realt
 * Fixing Rigning Problem
 * Adding Sky Radiance
 * Transforming the unity scene to an SDF map
-* Expanding to 3D (the mian idea of this whole thing)
+* Expanding to 3D (the main idea of this whole thing)
 
 # Resources:
 - [Paper by Alexander Sannikov](https://drive.google.com/file/d/1L6v1_7HY2X-LV3Ofb6oyTIxgEaP4LOI6/view)
 - [SimonDev Video](https://youtu.be/3so7xdZHKxw?si=Kop3WY-9n88FcHjS) and [Web Implementation](https://github.com/simondevyoutube/Shaders_RadianceCascades)
-- [GM Shaders Article](https://mini.gmshaders.com/p/radiance-cascades), he has also a great [Article](https://mini.gmshaders.com/p/radiance-cascades2) on how to optimize the process a lot
-- [tmpvar Visualizations](https://tmpvar.com/poc/radiance-cascades/)
+- [GM Shaders Article](https://mini.gmshaders.com/p/radiance-cascades), they have also a great [Article](https://mini.gmshaders.com/p/radiance-cascades2) on how to optimize the process a lot
+- [Tmpvar Visualizations](https://tmpvar.com/poc/radiance-cascades/)
