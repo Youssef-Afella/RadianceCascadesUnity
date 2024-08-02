@@ -8,6 +8,7 @@ In this small post I will cover a bit about the implementation process only and 
 If you wanna know more about the actual concept here is the original paper : [Radiance Cascades](https://drive.google.com/file/d/1L6v1_7HY2X-LV3Ofb6oyTIxgEaP4LOI6/view)
 
 The project is based on the 2D Built-In RenderPipeline in Unity 2020.3.15f2 but I'm sure you can upgrade it to any other version of Unity or any other RenderPipeline without getting any errors<br/>
+
 This is a bare implementation of the technic, it doesn't include any Ringing fix or Sky radiance ...<br/>
 I just wanted to present a clear example of the concept<br/>
 
